@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>My Agent</title>
+<link rel="icon" href="logo.png">
+<style>
+  body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+  textarea { width: 100%; height: 80px; padding: 8px; }
+  button { padding: 8px 20px; font-size: 16px; cursor: pointer; margin-top: 10px; }
+  #output { white-space: pre-wrap; border: 1px solid #ddd; padding: 16px; margin-top: 20px; min-height: 100px; }
+</style>
+</head>
+<body>
+  <h1>My Agent</h1>
+  <textarea id="input" placeholder="输入你的问题..."onkeydown="handleKeydown(event)"></textarea><br>
+  <button onclick="send()">发送</button>
+  <div id="output"></div>
+
+<script>
+async function send() {
+  const input = document.getElementById('input').value;
+  const output = document.getElementById('output');
+  output.textContent = '';
+
+  const resp = await fetch('http://154.12.88.186:8000/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: input, thread_id: 'web'})
+  });
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, {stream: true});
+
+    // SSE 按 \n\n 分割事件
+    let idx;
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const event = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+
+      // 解析 data 行
+      const dataMatch = event.match(/^data: (.+)$/m);
+      if (dataMatch) {
+        try {
+          const data = JSON.parse(dataMatch[1]);
+          if (data.content) output.textContent += data.content;
+        } catch {}
+      }
+
+    }
+  }
+  document.getElementById('input').value = '';
+}
+
+function handleKeydown(event) {
+  if (event.key == 'Enter' && !event.shiftKey) {
+    send();
+  }
+}
+</script>
+</body>
+</html>
