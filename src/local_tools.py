@@ -3,11 +3,7 @@ from langchain_core.tools import tool
 
 @tool
 def get_system_info() -> str:
-
-    """
-        获取系统信息
-
-    """
+    """获取系统信息"""
     import platform
     import shutil
     import json
@@ -19,11 +15,7 @@ def get_system_info() -> str:
 
 @tool
 def run_command(command:str) -> str:
-    """
-        运行bash命令
-
-    """
-
+    """运行bash命令"""
     import subprocess
     res = subprocess.run(command,shell=True,capture_output=True, text=True)
     print('return code',res.returncode)
@@ -33,11 +25,7 @@ def run_command(command:str) -> str:
 
 @tool
 def calculate(expression:str) -> str:
-    """
-        计算表达式
-
-    """
-
+    """计算表达式 """
     import math
     try:
         result = eval(expression,{"__builtins__":None},None)

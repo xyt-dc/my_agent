@@ -1,0 +1,9 @@
+{
+  "servers": [
+    {
+      "name": "通用MCP工具",
+      "command": "/root/my-agent/.venv/bin/python3",
+      "args": ["mcp_server.py"]
+    }
+  ]
+}

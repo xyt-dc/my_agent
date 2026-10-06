@@ -6,7 +6,9 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from mcp.client.stdio import stdio_client
 from mcp import ClientSession, StdioServerParameters
 from langchain_mcp_adapters.tools import load_mcp_tools
+from langchain_mcp_adapters.client import MultiServerMCPClient
 import os
+import json
 
 
 class Agent:
@@ -15,6 +17,7 @@ class Agent:
         self.db_path = db_path
         self.tools = []
         self._mcp_connected = False
+        self.mcp_client = None
 
     async def _ensure_tools_loaded(self):
         if self._mcp_connected:
@@ -23,23 +26,26 @@ class Agent:
         from local_tools import LOCAL_TOOLS
         self.tools.extend(LOCAL_TOOLS)
 
-        server_params = StdioServerParameters(
-            command='/root/my-agent/.venv/bin/python3',
-            args=[os.path.join(os.path.dirname(__file__), 'mcp_server.py')]
-        )
-        # 不能用 async with！关了 session 工具就调不了了
-        # 手动打开，让 MCP 连接活在整个 Agent 生命周期里
-        self._mcp_ctx = stdio_client(server_params)
-        self._mcp_read, self._mcp_write = await self._mcp_ctx.__aenter__()
-        self._mcp_session = ClientSession(self._mcp_read, self._mcp_write)
-        await self._mcp_session.__aenter__()
-        await self._mcp_session.initialize()
-        mcp_tools = await load_mcp_tools(self._mcp_session)
+        config_path = os.path.join(os.path.dirname(__file__),'mcp_config.json')
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                config = json.load(f)
+            connections = {}
+            for server in config['servers']:
+                connections[server['name']] = {'command':server['command'],'args':server['args'],'transport':'stdio'}
+        self._mcp_client = MultiServerMCPClient(connections)
+        mcp_tools = await self._mcp_client.get_tools()
+        print(f"🔌 MCP 发现 { len (mcp_tools)} 个工具")
         self.tools.extend(mcp_tools)
-
         self._mcp_connected = True
-        print(f"✅ 本地 + MCP 共 {len(self.tools)} 个工具")
         return self.tools
+
+    async def _load_mcp_tools_from_server(self,params:StdioServerParameters):
+        async with stdio_client(params) as (read,write):
+            async with ClientSession(read,write) as Session:
+                await Session.initialize()
+                mcp_tools = await load_mcp_tools(session=Session)
+        return mcp_tools
 
     async def ask(self, user_input: str, thread_id: str = "default"):
         await self._ensure_tools_loaded()
@@ -82,7 +88,8 @@ class Agent:
                 yield {"type": "token", "content": chunk.content}
             if chunk.tool_calls:
                 for tc in chunk.tool_calls:
-                    yield {"type": "tool_call", "tool": tc["name"], "args": tc["args"]}
+                    if tc.get("name"):
+                        yield {"type": "tool_call", "tool": tc["name"], "args": tc["args"]}
 
         elif _event == "on_tool_end":
             tool_name = event.get("name", "")
