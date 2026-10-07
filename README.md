@@ -131,8 +131,12 @@ open http://localhost:8000/
 |---|---|---|
 | 本地 | `run_command` | 执行 shell 命令 |
 | 本地 | `calculator` | 计算数学表达式 |
+| 本地 | `list_dir` | 列出当前目录下的所有文件夹和文件，并按照树结构返回 |
+| 本地 | `read_file` | 读文件内容|
 | MCP | `get_current_time` | 获取当前北京时间 |
 | MCP | `calculator` | 计算数学表达式（MCP 版） |
+| Web | `web_search` | 搜索网站并返回text，（目前仅支持text） |
+| Web | `fetch_url` | 爬网页内容 |
 | （更多待加） | | |
 
 ### 添加新 MCP Server

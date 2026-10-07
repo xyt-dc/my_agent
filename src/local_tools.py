@@ -71,5 +71,6 @@ def read_files(path:str,Max_File_Size:int=1024*1024*10,Max_char:int=200)->str:
             return f"📋{path}阅读完毕👌,({m_size}bytes):\n{content}"
     except FileNotExistError as e:
         return f"❌阅读失败:\n{str(e)}\n"
+
     
 LOCAL_TOOLS = [get_system_info, run_command, calculate]
