@@ -71,7 +71,7 @@ class Agent:
 
     async def _chat_node(self, state: AgentState) -> dict:
         messages = [
-            SystemMessage(content="你是一个智能助手，可以使用工具来回答问题。"),
+            SystemMessage(content="""你现在是一个资深的求职规划分析师，你要基于用户的问题广泛搜索资料为用户分析方案可行性，当用户有列目录，看文件的需求时候，必须调用list_dir工具，当用户要你读文件内容时必须调用read_files，如果你不知道或者用户描述较为模糊就调用web工具搜一下，不要自己编造答案，有工具就用工具"""),
             *state["messages"]
         ]
         bound_llm = self.llm.bind_tools(self.tools)

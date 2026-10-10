@@ -34,8 +34,11 @@ def calculate(expression:str) -> str:
     return result
 
 @tool
+def res_listdir(path:str)->str:
+    """ 列出当前目录下的所有文件夹和文件，并按照树结构返回，当prompt里有让你列出/帮我看看/查一下/去到某个目录下的所有文件时你要调用这个函数，将函数的返回值原封不动的回复给客服"""
+    return list_dir(path=path)
+
 def list_dir(path:str)->str:
-    """ 列出当前目录下的所有文件夹和文件，并按照树结构返回"""
     import os
     path_dir = ""
     try:
@@ -69,8 +72,67 @@ def read_files(path:str,Max_File_Size:int=1024*1024*10,Max_char:int=200)->str:
             elif len(content) > Max_char:
                 content = content[:Max_char>>1] + "..."+content[-Max_char>>1:]
             return f"📋{path}阅读完毕👌,({m_size}bytes):\n{content}"
-    except FileNotExistError as e:
+    except Exception as e:
         return f"❌阅读失败:\n{str(e)}\n"
+@tool 
+def write_files(path:str,content:str)->str:
+    """写文件时调用这个工具，将文件内容写入文件，这里path是文件的路径，content是文件内容"""
+    import os
+    try:
+        with open(path,"w",encoding="utf-8") as f:
+            f.write(content)
+        return f"✅{path}写入成功👌"
+    except Exception as e:
+        return f"❌写入失败:\n{str(e)}\n"
 
+@tool
+def get_weather(city:str)->str:
+    """获取城市的天气信息，当用户问你今天天气情况如何时优先调用这个工具，将用户需要的信息返还给用户，
+    用户：{city}的天气情况信息
+    回复：{city}的当前摄氏温度
+    用户：{city}的华氏温度
+    回复：{city}的当前华氏温度
+    用户：给我完整的天气信息
+    回复要把所有信息都返还给用户
+    """
+    import httpx
+    import json
+    url = f"https://wttr.in/{city}?format=j1"
+    try:
+        resp = httpx.get(url,timeout=10,headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"})
+        data = resp.json()
+        
+        current_weater = data['current_condition'][0]
+        FeelslikeC = current_weater['FeelsLikeC']
+        FeelslikeF = current_weater['FeelsLikeF']
+        cloudcover = current_weater['cloudcover']
+        humidity = current_weater['humidity']
+        observation_time = current_weater['observation_time']
+        precipInces = current_weater['precipInches']
+        precipMM = current_weater['precipMM']
+        pressure = current_weater['pressure']
+        precipInces = current_weater['precipInches']
+        temp_c = current_weater['temp_C']
+        temp_f = current_weater['temp_F']
+        uvIndex = current_weater['uvIndex']
+
+        result = { "FeelsLikeC" : current_weater[ "FeelsLikeC" ], 
+                    "FeelsLikeF" : current_weater[ "FeelsLikeF" ], 
+                    "cloudcover" : current_weater[ "cloudcover" ], 
+                    "humidity" : current_weater[ "humidity" ], 
+                    "observation_time" : current_weater[ "observation_time" ], 
+                    "precipInches" : current_weater[ "precipInches" ], 
+                    "precipMM" : current_weater[ "precipMM" ], 
+                    "pressure" : current_weater[ "pressure" ], 
+                    "precipInches" : current_weater[ "precipInches" ], 
+                    "temp_C" : current_weater[ "temp_C" ], 
+                    "temp_F" : current_weater[ "temp_F" ], 
+                    "uvIndex" : current_weater[ "uvIndex" ],
+        }
+        return result
+
+    except Exception as e:
+        return f"❌获取天气失败:\n{str(e)}\n"
+        
     
-LOCAL_TOOLS = [get_system_info, run_command, calculate]
+LOCAL_TOOLS = [get_system_info, run_command, calculate,res_listdir,read_files,get_weather,write_files]

@@ -9,6 +9,6 @@ def  get_llm():
     
     return ChatDeepSeek(model=os.getenv("DEEPSEEK_MODEL","deepseek-chat"),
         api_key=api_key,
-        temperature = os.getenv("DEEPSEEK_TEMPERATURE","0.7")
+        temperature = os.getenv("DEEPSEEK_TEMPERATURE","0.9")
     )
 
