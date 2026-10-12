@@ -7,6 +7,7 @@ from mcp.client.stdio import stdio_client
 from mcp import ClientSession, StdioServerParameters
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.types import interrupt
 import os
 import json
 
@@ -47,6 +48,13 @@ class Agent:
                 mcp_tools = await load_mcp_tools(session=Session)
         return mcp_tools
 
+    def review_condition(self,state:AgentState):
+        last_msg = state['messages'][-1]
+        if isinstance(last_msg,AIMessage) and last_msg.tool_calls:
+            return 'Human_review'
+        return END
+
+
     async def ask(self, user_input: str, thread_id: str = "default"):
         await self._ensure_tools_loaded()
 
@@ -55,7 +63,10 @@ class Agent:
             graph.add_node("chat", self._chat_node)
             graph.add_node("tools", ToolNode(self.tools))
             graph.add_edge(START, "chat")
-            graph.add_conditional_edges("chat", tools_condition)
+            graph.add_conditional_edges("chat", self.review_condition,{"Human_review" : "Human_review" ,
+            END: END,})
+            graph.add_node("Human_review", self.Human_review)
+            #graph.add_edge("Human_review", "tools")
             graph.add_edge("tools", "chat")
             g = graph.compile(checkpointer=memory_ctx)
 
@@ -107,3 +118,20 @@ class Agent:
             else:
                 text_content = str(result)
             yield {"type": "tool_result", "tool": tool_name, "result": text_content}
+
+    def Human_review(self,state:AgentState):
+        last_msg = state['messages'][-1]
+        #print(last_msg,flush = True)
+        call_summary = []
+        count = len(last_msg.tool_calls)
+        for tc in last_msg.tool_calls:
+            call_summay.extend({'tool':tc['name'],'arg':tc['args']})
+        decision = interrupt({
+            'type':"tool_approval",
+            "count":count,
+            "calls":call_summary,
+            "question":f"Agent 想调用{*call_summary}工具，是否继续？"
+            "options":["approval","refuse","skip"]
+        })
+        return {"messages": [last_msg]}
+
