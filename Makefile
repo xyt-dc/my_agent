@@ -27,5 +27,8 @@ stop:
 clean:
 	rm -f $(SRC_DIR)/agent.db
 
+logging:
+	tail -f $(LOG)
+
 # 声明这不是真实文件名（防止和 dev/start 目录重名冲突）
 .PHONY: dev start restart stop clean

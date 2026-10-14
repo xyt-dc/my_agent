@@ -5,61 +5,226 @@
 <title>My Agent</title>
 <link rel="icon" href="logo.png">
 <style>
-  body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-  textarea { width: 100%; height: 80px; padding: 8px; }
-  button { padding: 8px 20px; font-size: 16px; cursor: pointer; margin-top: 10px; }
-  #output { white-space: pre-wrap; border: 1px solid #ddd; padding: 16px; margin-top: 20px; min-height: 100px; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; max-width: 800px; margin: 0 auto; padding: 120px 20px 40px; background: #fafafa; }
+  h1 { font-size: 24px; }
+
+  #chat { border: 1px solid #ddd; background: #fff; border-radius: 8px; padding: 16px; margin-top: 20px; min-height: 300px; max-height: 60vh; overflow-y: auto; }
+
+  .msg { margin: 10px 0; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+  .msg.user { text-align: right; }
+  .msg.user .bubble { display: inline-block; background: #007aff; color: #fff; padding: 8px 14px; border-radius: 16px 16px 4px 16px; text-align: left; }
+  .msg.assistant .bubble { display: inline-block; background: #eee; padding: 8px 14px; border-radius: 16px 16px 16px 4px; }
+
+  .tool-card { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px 12px; margin: 8px 0; font-size: 13px; }
+  .tool-card .title { color: #ad6800; font-weight: bold; }
+  .tool-card pre { margin: 6px 0 0; padding: 6px; background: #f5f5f5; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+
+  .interrupt-card { border: 2px solid #fa8c16; background: #fff7e6; border-radius: 8px; padding: 14px; margin: 12px 0; }
+  .interrupt-card h3 { margin: 0 0 8px; color: #d46b08; font-size: 15px; }
+  .interrupt-card .call-item { background: #fff; border: 1px solid #ffd591; border-radius: 4px; padding: 8px; margin: 6px 0; font-size: 13px; }
+  .interrupt-card .call-item b { color: #d4380d; }
+  .interrupt-card pre { margin: 4px 0 0; font-size: 12px; color: #555; white-space: pre-wrap; }
+  .interrupt-card .actions { margin-top: 10px; display: flex; gap: 8px; }
+  .interrupt-card button { padding: 6px 18px; border-radius: 4px; border: 1px solid #d9d9d9; cursor: pointer; font-size: 14px; }
+  .interrupt-card button.approve { background: #52c41a; border-color: #52c41a; color: #fff; }
+  .interrupt-card button.refuse { background: #fff; color: #cf1322; border-color: #ffa39e; }
+  .interrupt-card button.skip { background: #fff; color: #888; }
+
+  textarea { width: 100%; height: 90px; padding: 10px 10px 36px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 15px; resize: vertical; }
+  .input-wrap { position: relative; margin-top: 20px; }
+  .input-wrap .send { position: absolute; right: 8px; bottom: 8px; margin-top: 0; padding: 4px 18px; font-size: 14px; }
+  button.send { background: #007aff; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  button.send:disabled { background: #b0b0b0; cursor: not-allowed; }
+  .status { color: #888; font-size: 13px; margin-top: 8px; min-height: 18px; }
 </style>
 </head>
 <body>
-  <h1>My Agent</h1>
-  <textarea id="input" placeholder="输入你的问题..."onkeydown="handleKeydown(event)"></textarea><br>
-  <button onclick="send()">发送</button>
-  <div id="output"></div>
+<h1>My Agent</h1>
+
+<div id="chat"></div>
+
+<div class="input-wrap">
+  <textarea id="input" placeholder="输入你的问题... Enter 发送，Shift+Enter 换行" onkeydown="handleKeydown(event)"></textarea>
+  <button class="send" id="sendBtn" onclick="send()">发送</button>
+</div>
+<div class="status" id="status"></div>
 
 <script>
-async function send() {
-  const input = document.getElementById('input').value;
-  const output = document.getElementById('output');
-  output.textContent = '';
+const API = '';  // 同源部署，直接用相对路径（原来是写死的 IP）
+let currentThreadId = 'web';   // chat 和 resume 必须用同一个 thread_id
 
-  const resp = await fetch('http://154.12.88.186:8000/chat', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message: input, thread_id: 'web'})
+const chatEl = document.getElementById('chat');
+const inputEl = document.getElementById('input');
+const btnEl = document.getElementById('sendBtn');
+const statusEl = document.getElementById('status');
+
+// ======== 消息渲染 ========
+function addBubble(cls, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  const span = document.createElement('span');
+  span.className = 'bubble';
+  span.textContent = text;
+  div.appendChild(span);
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return span;
+}
+
+function addToolCard(kind, tool, detail) {
+  const div = document.createElement('div');
+  div.className = 'tool-card';
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = (kind === 'tool_call' ? '⚙️ 调用工具：' : '✅ 工具返回：') + tool;
+  div.appendChild(title);
+  const pre = document.createElement('pre');
+  pre.textContent = typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2);
+  div.appendChild(pre);
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// ======== interrupt 确认卡片 ========
+function addInterruptCard(data) {
+  const div = document.createElement('div');
+  div.className = 'interrupt-card';
+  const h3 = document.createElement('h3');
+  h3.textContent = data.question || `是否执行 ${data.count} 个工具调用？`;
+  div.appendChild(h3);
+
+  (data.calls || []).forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'call-item';
+    const b = document.createElement('b');
+    b.textContent = '🔧 ' + (c.tool_name || 'unknown');
+    item.appendChild(b);
+    const pre = document.createElement('pre');
+    pre.textContent = JSON.stringify(c.tool_arg || {}, null, 2);
+    item.appendChild(pre);
+    div.appendChild(item);
   });
 
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  ['approve', 'refuse', 'skip'].forEach(opt => {
+    const btn = document.createElement('button');
+    btn.textContent = opt === 'approve' ? '✅ 同意' : opt === 'refuse' ? '❌ 拒绝' : '⏭ 跳过';
+    btn.className = opt;
+    btn.onclick = () => {
+      actions.querySelectorAll('button').forEach(b => b.disabled = true);
+      h3.textContent += `（已选择：${opt}）`;
+      resume(opt);
+    };
+    actions.appendChild(btn);
+  });
+  div.appendChild(actions);
+
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+// ======== SSE 流读取（chat / resume 共用） ========
+async function streamSSE(resp, onEvent) {
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-
   while (true) {
     const {done, value} = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, {stream: true});
-
-    // SSE 按 \n\n 分割事件
     let idx;
     while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const event = buffer.slice(0, idx);
+      const raw = buffer.slice(0, idx);
       buffer = buffer.slice(idx + 2);
-
-      // 解析 data 行
-      const dataMatch = event.match(/^data: (.+)$/m);
-      if (dataMatch) {
-        try {
-          const data = JSON.parse(dataMatch[1]);
-          if (data.content) output.textContent += data.content;
-        } catch {}
-      }
-
+      // 解析 event: 与 data: 两行
+      const evMatch = raw.match(/^event: (.+)$/m);
+      const dataMatch = raw.match(/^data: (.+)$/m);
+      if (!evMatch || !dataMatch) continue;
+      let data;
+      try { data = JSON.parse(dataMatch[1]); } catch { continue; }
+      onEvent(evMatch[1].trim(), data);
     }
   }
-  document.getElementById('input').value = '';
+}
+
+// 事件分发
+function makeHandler() {
+  let assistantSpan = null;
+  return (event, data) => {
+    switch (event) {
+      case 'token':
+        if (!assistantSpan) assistantSpan = addBubble('assistant', '');
+        assistantSpan.textContent += data.content || '';
+        chatEl.scrollTop = chatEl.scrollHeight;
+        break;
+      case 'tool_call':
+        assistantSpan = null;  // 工具调用后 LLM 会重新组织答案
+        addToolCard('tool_call', data.tool, data.args);
+        break;
+      case 'tool_result':
+        assistantSpan = null;
+        addToolCard('tool_result', data.tool, data.result);
+        break;
+      case 'interrupt':
+        assistantSpan = null;
+        addInterruptCard(data.data || data);   // data 结构：{type:'interrupt', data:{...}}
+        break;
+      case 'error':
+        addBubble('assistant', '⚠️ 出错：' + (data.error || '未知错误'));
+        break;
+      case 'done':
+        statusEl.textContent = '';
+        btnEl.disabled = false;
+        break;
+    }
+  };
+}
+
+// ======== 发送 ========
+async function send() {
+  const input = inputEl.value.trim();
+  if (!input || btnEl.disabled) return;
+  btnEl.disabled = true;
+  statusEl.textContent = '思考中…';
+  inputEl.value = '';
+  addBubble('user', input);
+
+  try {
+    const resp = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: input, thread_id: currentThreadId})
+    });
+    await streamSSE(resp, makeHandler());
+  } catch (e) {
+    addBubble('assistant', '⚠️ 请求失败：' + e.message);
+    statusEl.textContent = '';
+    btnEl.disabled = false;
+  }
+}
+
+// ======== 恢复图（审核后调用） ========
+async function resume(decision) {
+  statusEl.textContent = '已提交审核，继续执行…';
+  try {
+    const resp = await fetch(API + '/resume', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({thread_id: currentThreadId, data: decision})
+    });
+    await streamSSE(resp, makeHandler());
+  } catch (e) {
+    addBubble('assistant', '⚠️ 恢复失败：' + e.message);
+    statusEl.textContent = '';
+    btnEl.disabled = false;
+  }
 }
 
 function handleKeydown(event) {
-  if (event.key == 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
     send();
   }
 }
